@@ -9,7 +9,9 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -23,10 +25,12 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.graphics.RectF;
+import android.view.View;
 
 public class Football extends Activity implements SensorEventListener {
 	
-    String robotBtAddress="00:06:66:04:27:7e"; // Change this 
+    String robotBtAddress=null; // Change this 
     TextView statusTv;
     TextView messagesTv;
     TBlue tBlue; 
@@ -38,6 +42,8 @@ public class Football extends Activity implements SensorEventListener {
     int skipped; // continuously skipped sending because robot not ready
     Handler timerHandler; 
     Runnable sendToArduino; 
+    
+    private StatusView tStatus;
     
     private static final int REQUEST_CONNECT_DEVICE = 1;
     private static final int MENU_SCAN = 1;
@@ -93,12 +99,30 @@ public class Football extends Activity implements SensorEventListener {
 
 
     /*** User interface ***/
-
+    @Override
     public boolean onCreateOptionsMenu(Menu menu) { 
     	menu.add(Menu.NONE, MENU_SCAN, 0, "Choose Device"); 
        	menu.add(Menu.NONE, MENU_CONNECT, 0, "Connect"); 
         menu.add(Menu.NONE, MENU_DISCONNECT, 0, "Disconnect"); 
+
+        
     	return true;
+    }
+    
+    @Override
+    public boolean onPrepareOptionsMenu (Menu menu) {
+    	if (robotBtAddress == null) {
+    		menu.findItem(MENU_CONNECT).setEnabled(false);
+    	} else {
+    		menu.findItem(MENU_CONNECT).setEnabled(true);
+    		
+    	}
+    	if (tBlue == null) {
+    		menu.findItem(MENU_DISCONNECT).setEnabled(false);
+    	} else {
+    		menu.findItem(MENU_DISCONNECT).setEnabled(true);
+    	}
+        return true;
     }
     
     void initGUI()
@@ -115,6 +139,7 @@ public class Football extends Activity implements SensorEventListener {
         statusTv = new TextView(this);
         statusTv.setBackgroundColor(Color.WHITE);
         statusTv.setTextColor(Color.BLACK);
+        setStatus();
         
         Log.i("FB", "User interface half way.. ");
         container.addView(statusTv);
@@ -122,14 +147,80 @@ public class Football extends Activity implements SensorEventListener {
         messagesTv = new TextView(this);
         messagesTv.setText("");
         container.addView(messagesTv);
+        
+        tStatus = new StatusView(this);
+        container.addView(tStatus);
+        
+        
         setContentView(container); 
+    }
+    
+    void setStatus() {
+    	
+    	if (tBlue != null) {
+            statusTv.setText("Connected. To disconnect, press Menu and disconnect.");
+
+    	} else {
+    		if (robotBtAddress == null) {
+    			statusTv.setText("Not connected. Press Menu, then choose a device.");
+    		} else {
+    			statusTv.setText("Not connected. Press Menu, then connect.");
+    		}
+    	}
+    	
+    }
+
+    
+    public class StatusView extends View {
+    	private int l = 3;
+    	private int r = 3;
+    	
+    	public void setL(int newval) {
+    		if (newval < 0) {
+    			newval = Math.abs(newval);
+    			l = (newval * 0xFF/100) << 16;
+    		
+    		} else {
+    			l = (newval * 0xFF/100) << 8;
+    		}
+    	}
+    	public void setR(int newval) {
+    		Log.i("BOT", "New R: " + newval );
+    		if (newval < 0) {
+    			newval = Math.abs(newval);
+    			r = (newval * 0xFF/100) << 16;
+    		
+    		} else {
+    			r = (newval * 0xFF/100) << 8;
+    		}
+    		Log.i("BOT", "Set r to: " + r );
+    	}
+    	public StatusView(Context context) {
+    		super(context);
+    	}
+    	
+    	public void onDraw(Canvas canvas) {
+    		Paint paint = new Paint();
+    		
+    		int basecolor = 0xFF000000;
+    		RectF oval = new RectF(0, 0,
+    								canvas.getWidth(),
+    								canvas.getHeight()/2);
+    		
+    		paint.setColor(l | basecolor);
+    		canvas.drawArc(oval, 90, 180, true, paint); 
+    		paint.setColor(r | basecolor);
+    		canvas.drawArc(oval, 270, 180, true, paint); 
+    		
+    	}
+    	
     }
 
     public void msg(String s)
     {
         Log.i("FB", s);
-        if (7<=messagesTv.getLineCount()) messagesTv.setText("");
-        messagesTv.append(s);
+        //if (2<=messagesTv.getLineCount()) messagesTv.setText("");
+        messagesTv.setText(s);
     }
 
     void vibrate()
@@ -173,6 +264,7 @@ public class Football extends Activity implements SensorEventListener {
                 // Get the device MAC address
             	robotBtAddress = data.getExtras()
                                      .getString(DeviceListActivity.EXTRA_DEVICE_ADDRESS);
+            	setStatus();
             }
             break;
         }
@@ -182,7 +274,7 @@ public class Football extends Activity implements SensorEventListener {
         msg("Preparing... ");
         timerHandler.postDelayed(sendToArduino, 1000); 
         skipped=9999; // force Bluetooth reconnection
-        msg("Running... ");
+        msg("Attempting connection... ");
 
     }
     public void stopController() {
@@ -221,9 +313,9 @@ public class Football extends Activity implements SensorEventListener {
         skipped=0; 
         tBlue=new TBlue(robotBtAddress);
         if (tBlue.streaming()) {
-            msg("Bluetooth OK. ");
+            setStatus();
         } else {
-            msg("Error: Bluetooth connection failed. Is Bluetooth turned on? Is your phone paired with the RN42 module?");
+            msg("Bluetooth connection failed. Is Bluetooth on? Are you paired with the module?");
         }
     }
 
@@ -232,8 +324,9 @@ public class Football extends Activity implements SensorEventListener {
         msg("Bluetooth closing...");
         tBlue.close();
         tBlue = null;
+        msg("Ready...");
+        setStatus();
     }
-
 
 
     /*** Motor calculations for left and right ***/
@@ -268,11 +361,11 @@ public class Football extends Activity implements SensorEventListener {
     {
         if ( (skipped>20) ) {
             closeAccel();
-            initBluetooth();
             initAccel();
+            initBluetooth();
         }
         if (!tBlue.streaming()) {
-            msg("0");
+            //msg("0");
             skipped++;
             return;
         }
@@ -284,22 +377,27 @@ public class Football extends Activity implements SensorEventListener {
         if (kick) s+="k"; else s+="-";
         s+="U";
 
-        statusTv.setText(String.format(
-                "%s    left: %3.0f%% right: %3.0f%%, kick: %b.", 
-                s, Math.floor(l*100), Math.floor(r*100), 
-                kick));
+        //statusTv.setText(String.format(
+        //        "%s    left: %3.0f%% right: %3.0f%%, kick: %b.", 
+        //        s, Math.floor(l*100), Math.floor(r*100), 
+        //        kick));
+        
+        tStatus.setL( (int) Math.floor(l*100) );
+        tStatus.setR( (int) Math.floor(r * 100) );
+        tStatus.invalidate();
 
         tBlue.write("?");
         String in=tBlue.read(); 
-        msg(""+in);
+        //msg(""+in);
         if (in.startsWith("L") && tBlue.streaming()) {
             Log.i("fb", "Clear to send, sending... ");
             tBlue.write(s); 
             skipped=0;
+            msg("Bluetooth transmissions OK.");
         } else {
             Log.i("fb", "Not ready, skipping send. in: \""+ in+"\"");
             skipped++;
-            msg("!");
+            msg("Not ready. Skipping transmission.");
         }
         if (kick) vibrate();
     }

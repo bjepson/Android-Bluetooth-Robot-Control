@@ -3,8 +3,11 @@
 
 package fi.sulautetut.android.football;
 
+import fi.sulautetut.android.football.DeviceListActivity;
+
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.graphics.Color;
 import android.hardware.Sensor;
@@ -36,9 +39,11 @@ public class Football extends Activity implements SensorEventListener {
     Handler timerHandler; 
     Runnable sendToArduino; 
     
-    private static final int MENU_CONNECT = 1;
-    private static final int MENU_DISCONNECT = 2;
-
+    private static final int REQUEST_CONNECT_DEVICE = 1;
+    private static final int MENU_SCAN = 1;
+    private static final int MENU_CONNECT = 2;
+    private static final int MENU_DISCONNECT = 3;
+    
     /*** Main - automatically called methods ***/
 
     @Override
@@ -90,8 +95,9 @@ public class Football extends Activity implements SensorEventListener {
     /*** User interface ***/
 
     public boolean onCreateOptionsMenu(Menu menu) { 
-    	menu.add(Menu.NONE, MENU_CONNECT, 0, "Connect"); 
-    	menu.add(Menu.NONE, MENU_DISCONNECT, 0, "Disconnect"); 
+    	menu.add(Menu.NONE, MENU_SCAN, 0, "Choose Device"); 
+       	menu.add(Menu.NONE, MENU_CONNECT, 0, "Connect"); 
+        menu.add(Menu.NONE, MENU_DISCONNECT, 0, "Disconnect"); 
     	return true;
     }
     
@@ -159,6 +165,19 @@ public class Football extends Activity implements SensorEventListener {
 
     /*** Bluetooth ***/
 
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        switch (requestCode) {
+        case REQUEST_CONNECT_DEVICE:
+            // When DeviceListActivity returns with a device to connect
+            if (resultCode == Activity.RESULT_OK) {
+                // Get the device MAC address
+            	robotBtAddress = data.getExtras()
+                                     .getString(DeviceListActivity.EXTRA_DEVICE_ADDRESS);
+            }
+            break;
+        }
+    }
+
     public void startController() {
         msg("Preparing... ");
         timerHandler.postDelayed(sendToArduino, 1000); 
@@ -167,12 +186,15 @@ public class Football extends Activity implements SensorEventListener {
 
     }
     public void stopController() {
-        r = 0; 
-        l = 0;
-        sendLR();
 
-        closeAccel();
-        closeBluetooth();
+    	closeAccel();
+        
+    	r = 0; 
+        l = 0;
+        if (tBlue != null) {
+        	sendLR();
+        	closeBluetooth();
+        }
 
         timerHandler.removeCallbacks(sendToArduino);    
     }
@@ -185,6 +207,10 @@ public class Football extends Activity implements SensorEventListener {
     	case MENU_DISCONNECT:
     		stopController();
     		return true;
+    	case MENU_SCAN:
+            Intent serverIntent = new Intent(this, DeviceListActivity.class);
+            startActivityForResult(serverIntent, REQUEST_CONNECT_DEVICE);
+            return true;
     	}
     	return false;
     }
@@ -205,6 +231,7 @@ public class Football extends Activity implements SensorEventListener {
     {
         msg("Bluetooth closing...");
         tBlue.close();
+        tBlue = null;
     }
 
 

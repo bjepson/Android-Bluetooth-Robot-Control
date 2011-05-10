@@ -30,7 +30,7 @@ import android.view.View;
 
 public class Football extends Activity implements SensorEventListener {
 	
-    String robotBtAddress=null; // Change this 
+    String robotBtAddress=null; 
     TextView statusTv;
     TextView messagesTv;
     TBlue tBlue; 
@@ -71,8 +71,6 @@ public class Football extends Activity implements SensorEventListener {
     {
         super.onResume(); 
         initAccel();
-
-
 
     } 
 
@@ -382,7 +380,7 @@ public class Football extends Activity implements SensorEventListener {
         //        s, Math.floor(l*100), Math.floor(r*100), 
         //        kick));
         
-        tStatus.setL( (int) Math.floor(l*100) );
+        tStatus.setL( (int) Math.floor(l * 100) );
         tStatus.setR( (int) Math.floor(r * 100) );
         tStatus.invalidate();
 
